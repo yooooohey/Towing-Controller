@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <!-- スマホでのスケーリングを固定し、ネイティブアプリのように動作させる -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#164e63">
+    <title>トーインコントローラー</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* ネイティブアプリ感を出すためのカスタムスタイル */
+        body {
+            overscroll-behavior-y: none; /* 引っ張り更新を防止 */
+            user-select: none; /* テキスト選択を防止 */
+            -webkit-user-select: none;
+            background-color: #164e63;
+        }
+
+        /* スクロールバーを完全に隠す */
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* スマホの狭い幅で文字を最大化するための調整 */
+        .card-time { font-size: 1.1rem; line-height: 1; letter-spacing: -0.05em; }
+        .card-menu { font-size: 1rem; line-height: 1; }
+        .card-pax { font-size: 0.9rem; line-height: 1; }
+        .card-name { font-size: 0.8rem; line-height: 1.1; }
+
+        @media (min-width: 640px) {
+            .card-time { font-size: 1.5rem; }
+            .card-menu { font-size: 1.25rem; }
+            .card-pax { font-size: 1rem; }
+            .card-name { font-size: 1rem; }
+        }
+
+        .is-dragging { opacity: 0.3; }
+    </style>
+
+    <!-- ブラウザにアプリとして認識させるマニフェスト設定 -->
+    <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%E3%83%88%E3%83%BC%E3%82%A4%E3%83%B3%E3%82%B3%E3%83%B3%E3%83%88%E3%83%AD%E3%83%BC%E3%83%A9%E3%83%BC%22%2C%22short_name%22%3A%22%E3%83%88%E3%83%BC%E3%82%A4%E3%83%B3%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23164e63%22%2C%22theme_color%22%3A%22%23164e63%22%2C%22start_url%22%3A%22.%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%253E%253Crect%20width%3D%27100%27%20height%3D%27100%27%20fill%3D%27%25230891b2%27%2F%253E%253Ctext%20x%3D%2750%27%20y%3D%2750%27%20font-family%3D%27sans-serif%27%20font-size%3D%2730%27%20fill%3D%27white%27%20text-anchor%3D%27middle%27%20dominant-baseline%3D%27middle%27%253ETow%253C%2Ftext%253E%253C%2Fsvg%253E%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+</head>
+<body class="h-[100dvh] w-screen overflow-hidden font-sans text-gray-800 flex flex-col bg-cyan-900">
+
+    <!-- ヘッダー -->
+    <header class="h-12 bg-cyan-800 flex items-center px-2 md:px-3 justify-between shadow-md z-20 flex-shrink-0">
+        <button onclick="openMenu()" class="p-2 text-white active:bg-cyan-700 rounded-md">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+        <h1 class="text-white font-bold text-sm md:text-lg tracking-wider">トーインコントローラー <span class="text-xs text-cyan-300 font-normal">v1.2</span></h1>
+        
+        <div class="flex items-center gap-1">
+            <!-- PWAインストールボタン (条件を満たした時のみ表示) -->
+            <button id="btn-install" class="hidden p-2 text-cyan-200 active:bg-cyan-700 rounded-md" title="アプリをインストール">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            </button>
+            <!-- フルスクリーンボタン -->
+            <button onclick="toggleFullScreen()" class="p-2 text-white active:bg-cyan-700 rounded-md" title="全画面表示">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- メインコンテナ: 4列を均等に配置 -->
+    <div class="flex-1 flex w-full overflow-hidden" id="app-container">
+        <!-- 列はJavaScriptで動的に生成されます -->
+    </div>
+
+    <!-- ゴースト（ドラッグ中のクローン要素）用コンテナ -->
+    <div id="drag-ghost" class="fixed pointer-events-none z-50 bg-white rounded shadow-2xl border-2 border-cyan-400 opacity-95 hidden scale-105 rotate-2 overflow-hidden">
+        <div id="ghost-content" class="p-1"></div>
+    </div>
+
+    <!-- ハンバーガーメニュー (ドロワー) -->
+    <div id="menu-overlay" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] hidden transition-opacity opacity-0">
+        <div id="menu-drawer" class="w-4/5 max-w-sm h-full bg-slate-50 shadow-2xl transform -translate-x-full transition-transform duration-300 flex flex-col">
+            <div class="bg-cyan-700 text-white p-4 flex justify-between items-center shadow-md">
+                <h2 class="text-xl font-bold">設定</h2>
+                <button onclick="closeMenu()" class="p-2 active:bg-cyan-800 rounded-full">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4 space-y-6">
+                <!-- 基本設定 -->
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="font-bold text-cyan-700 border-b border-cyan-100 pb-2 mb-3">基本設定</h3>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-600 mb-1">既定の待ち時間 (分)</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="setting-wait-time" inputmode="numeric" class="w-24 text-xl font-bold text-center bg-slate-100 border border-slate-300 rounded-lg py-2 focus:border-cyan-500 outline-none" />
+                            <span class="text-slate-600 font-bold">分後</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 各列の設定 (JSで生成) -->
+                <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="font-bold text-cyan-700 border-b border-cyan-100 pb-2 mb-3">ボート＆船長設定</h3>
+                    <div id="setting-columns" class="space-y-4">
+                        <!-- ここに列の設定が入ります -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-white border-t border-slate-200">
+                <button onclick="saveSettings()" class="w-full py-3 bg-cyan-600 text-white text-lg font-black rounded-xl shadow active:bg-cyan-700 mb-4">
+                    設定を保存
+                </button>
+                <p class="text-xs text-slate-400 text-center leading-tight">
+                    ※iPhone(Safari)で全画面のアプリとして追加するには<br>画面下部の「共有」アイコンから<br>「ホーム画面に追加」を選択してください。
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 予約モーダル -->
+    <div id="modal-overlay" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[70] hidden flex-col items-center justify-end sm:justify-center">
+        <div id="modal-content" class="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-md overflow-hidden transform transition-transform translate-y-full sm:translate-y-0 duration-300">
+            <div class="bg-cyan-600 px-5 py-3 flex justify-between items-center text-white">
+                <h3 id="modal-title" class="text-xl font-black">新規予約</h3>
+                <button onclick="closeModal()" class="p-2 rounded-full active:bg-cyan-700">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <div class="p-5 space-y-5">
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <label class="block text-sm font-bold text-slate-600 mb-1">予約時間</label>
+                        <input type="time" id="input-time" class="w-full text-3xl font-black text-center bg-slate-100 border-2 border-slate-200 rounded-xl py-2 focus:border-cyan-500 outline-none" />
+                    </div>
+                    <div class="w-24">
+                        <label class="block text-sm font-bold text-slate-600 mb-1">人数</label>
+                        <div class="relative">
+                            <input type="number" id="input-pax" min="1" inputmode="numeric" pattern="\d*" class="w-full text-3xl font-black text-center bg-slate-100 border-2 border-slate-200 rounded-xl py-2 pr-6 focus:border-cyan-500 outline-none" />
+                            <span class="absolute right-2 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">名</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-600 mb-1">メニュー</label>
+                    <div class="flex gap-2" id="menu-buttons"></div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-slate-600 mb-1">予約名</label>
+                    <input type="text" id="input-name" placeholder="お名前 (省略可)" class="w-full text-xl font-bold bg-slate-100 border-2 border-slate-200 rounded-xl px-4 py-3 focus:border-cyan-500 outline-none" />
+                </div>
+            </div>
+
+            <div class="p-4 bg-slate-50 border-t border-slate-200 flex gap-3">
+                <button id="btn-delete" onclick="deleteReservation()" class="hidden px-5 py-3 bg-red-100 text-red-600 rounded-xl font-bold flex items-center justify-center active:bg-red-200">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+                <button onclick="saveReservation()" class="flex-1 py-3 bg-cyan-600 text-white text-xl font-black rounded-xl shadow-lg active:bg-cyan-700 active:scale-95 transition-transform">
+                    保存する
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 設定と初期データ ---
+        const MENU_OPTIONS = ['D', 'M', 'U', 'J', 'X'];
+        
+        let state = {
+            settings: {
+                defaultWaitTime: 15
+            },
+            columns: [
+                { id: "col-1", jetName: "MJ-1", staffName: "田中", reservations: [] },
+                { id: "col-2", jetName: "MJ-2", staffName: "鈴木", reservations: [] },
+                { id: "col-3", jetName: "MJ-3", staffName: "佐藤", reservations: [] },
+                { id: "col-4", jetName: "MJ-4", staffName: "高橋", reservations: [] }
+            ],
+            drag: {
+                isDragging: false, itemId: null, sourceColId: null,
+                offsetX: 0, offsetY: 0, width: 0, ghostEl: null, targetColEl: null
+            },
+            modal: {
+                mode: 'add', targetColId: null, targetItemId: null,
+                formData: { time: "09:00", menu: "D", pax: 1, name: "" }
+            }
+        };
+
+        // ローカルストレージからデータ復元
+        function loadState() {
+            const saved = localStorage.getItem('towInAppState');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (parsed.settings) state.settings = parsed.settings;
+                    if (parsed.columns) state.columns = parsed.columns;
+                } catch (e) {
+                    console.error("データの読み込みに失敗しました", e);
+                }
+            }
+        }
+
+        // ローカルストレージへ保存
+        function saveStateToStorage() {
+            localStorage.setItem('towInAppState', JSON.stringify({
+                settings: state.settings,
+                columns: state.columns
+            }));
+        }
+
+        // --- ユーティリティ ---
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+        const formatTime = (timeStr) => timeStr.replace(':', '');
+        const sortReservations = (a, b) => a.time.localeCompare(b.time);
+
+        const getNextTime = (reservations) => {
+            if (!reservations || reservations.length === 0) {
+                // 現在時刻のキリの良い時間などを返すことも可能ですが、ここでは9:00固定または現在時刻ベース
+                const now = new Date();
+                return `${String(now.getHours()).padStart(2, '0')}:${String(Math.floor(now.getMinutes()/15)*15).padStart(2, '0')}`;
+            }
+            const lastRes = reservations[reservations.length - 1];
+            let [h, m] = lastRes.time.split(":").map(Number);
+            
+            // 設定された待機時間を加算
+            m += parseInt(state.settings.defaultWaitTime) || 15;
+            
+            while (m >= 60) {
+                m -= 60;
+                h += 1;
+            }
+            if (h >= 24) h -= 24; // 深夜超え考慮
+            
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        };
+
+        const getMenuColorClasses = (menu) => {
+            switch(menu) {
+                case 'D': return 'bg-yellow-400 text-yellow-950'; // D: 黄色 (文字は視認性のため暗色)
+                case 'M': return 'bg-red-500 text-white'; // M: 赤色
+                case 'U': return 'bg-blue-500 text-white'; // U: 青色
+                case 'J': return 'bg-black text-white'; // J: 黒色
+                case 'X': return 'bg-purple-500 text-white'; // X: 紫色
+                default: return 'bg-cyan-100 text-cyan-700';
+            }
+        };
+
+        // --- STREAMING_CHUNK:Layout Rendering... ---
+        const appContainer = document.getElementById('app-container');
+
+        // 初回の列枠生成
+        function initLayout() {
+            appContainer.innerHTML = '';
+            state.columns.forEach(col => {
+                const colEl = document.createElement('div');
+                colEl.className = "w-1/4 flex flex-col bg-sky-50 border-r border-cyan-800 last:border-r-0 relative";
+                colEl.dataset.colId = col.id;
+                
+                colEl.innerHTML = `
+                    <div class="bg-white z-10 sticky top-0 shadow-sm pointer-events-none">
+                        <div class="bg-cyan-600 text-white text-center py-1">
+                            <h2 class="text-sm md:text-xl font-black tracking-tighter truncate px-1">${col.jetName}</h2>
+                        </div>
+                        <div class="bg-cyan-500 text-cyan-50 text-center border-b-2 border-cyan-700">
+                            <span class="text-xs md:text-base font-bold truncate block px-1">${col.staffName}</span>
+                        </div>
+                    </div>
+                    <div id="list-${col.id}" class="flex-1 overflow-y-auto p-1 md:p-2 space-y-1.5 hide-scrollbar pb-32 flex flex-col">
+                        <!-- カードはここにレンダリング -->
+                    </div>
+                `;
+                appContainer.appendChild(colEl);
+            });
+            renderAllReservations();
+        }
+
+        // 予約データのレンダリング
+        function renderAllReservations() {
+            state.columns.forEach(col => {
+                const listEl = document.getElementById(`list-${col.id}`);
+                if (!listEl) return;
+                listEl.innerHTML = ''; 
+
+                col.reservations.forEach(res => {
+                    const card = document.createElement('div');
+                    // 変更: touch-action-noneを削除し、インラインでtouchAction="pan-y"を指定(縦スクロール許可)
+                    card.className = "res-card bg-white rounded shadow border border-slate-200 overflow-hidden cursor-pointer select-none active:bg-slate-50 transition-colors";
+                    card.style.touchAction = "pan-y";
+                    card.dataset.itemId = res.id;
+                    card.dataset.colId = col.id;
+                    card.dataset.resData = JSON.stringify(res); 
+
+                    card.innerHTML = `
+                        <div class="p-1 md:p-2 pointer-events-none flex flex-col justify-between h-full">
+                            <div class="flex justify-between items-center border-b border-dashed border-slate-200 pb-0.5 mb-0.5">
+                                <span class="card-time font-black text-slate-800">${formatTime(res.time)}</span>
+                                <span class="card-menu font-black px-1 rounded leading-none flex items-center justify-center ${getMenuColorClasses(res.menu)}">${res.menu}</span>
+                            </div>
+                            <div class="flex items-start mt-0.5 gap-1 w-full overflow-hidden">
+                                <div class="flex items-baseline flex-shrink-0">
+                                    <span class="card-pax font-black text-slate-900">${res.pax}</span>
+                                    <span class="text-[0.6rem] text-slate-600 ml-0.5 font-bold">名</span>
+                                </div>
+                                <!-- 変更: 人数と横並びにしつつ、長い場合は改行を許可 -->
+                                <div class="card-name font-bold text-slate-700 leading-tight w-full break-all whitespace-normal">
+                                    ${res.name || "-"}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    listEl.appendChild(card);
+                });
+
+                // 追加ボタン
+                const addBtn = document.createElement('button');
+                addBtn.className = "mt-2 w-full py-2 border-2 border-dashed border-cyan-300 rounded text-cyan-600 font-bold text-sm md:text-base flex justify-center items-center active:bg-cyan-100 flex-shrink-0 bg-white/50";
+                addBtn.innerHTML = `＋ 追加`;
+                addBtn.onclick = () => openModal('add', col.id);
+                listEl.appendChild(addBtn);
+            });
+        }
+
+        // --- STREAMING_CHUNK:Drag and Drop Implementation... ---
+        let touchTimer = null;
+        const dragGhost = document.getElementById('drag-ghost');
+        const ghostContent = document.getElementById('ghost-content');
+
+        // ドラッグ開始に必要な長押し時間(ミリ秒)
+        const LONG_PRESS_DURATION = 250;
+
+        document.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0 && e.pointerType === 'mouse') return;
+            const card = e.target.closest('.res-card');
+            if (!card) return;
+
+            const colId = card.dataset.colId;
+            const itemId = card.dataset.itemId;
+            const resData = JSON.parse(card.dataset.resData);
+            const rect = card.getBoundingClientRect();
+
+            state.drag = {
+                isDragging: false, 
+                isActive: false, // 長押し完了フラグ
+                startX: e.clientX,
+                startY: e.clientY,
+                itemId: itemId, 
+                sourceColId: colId, 
+                resData: resData,
+                offsetX: e.clientX - rect.left, 
+                offsetY: e.clientY - rect.top,
+                width: rect.width, 
+                originalCard: card, 
+                targetColEl: null
+            };
+
+            // 長押し判定用タイマー
+            touchTimer = setTimeout(() => {
+                state.drag.isActive = true;
+                state.drag.isDragging = true;
+
+                if (navigator.vibrate) navigator.vibrate(40);
+
+                ghostContent.innerHTML = card.innerHTML; 
+                dragGhost.style.width = `${state.drag.width}px`;
+                dragGhost.style.left = `${e.clientX - state.drag.offsetX}px`;
+                dragGhost.style.top = `${e.clientY - state.drag.offsetY}px`;
+                
+                dragGhost.classList.remove('hidden');
+                card.classList.add('is-dragging');
+                
+                // ドラッグ中は全体のスクロールを無効化
+                document.body.style.overflow = 'hidden';
+            }, LONG_PRESS_DURATION);
+        });
+
+        document.addEventListener('pointermove', (e) => {
+            if (!state.drag.originalCard) return;
+
+            if (!state.drag.isActive) {
+                // 長押し確定前に指が動いたらスクロールとみなし、ドラッグ予約をキャンセル
+                const dx = Math.abs(e.clientX - state.drag.startX);
+                const dy = Math.abs(e.clientY - state.drag.startY);
+                if (dx > 10 || dy > 10) {
+                    clearTimeout(touchTimer);
+                    state.drag.originalCard = null; 
+                }
+                return;
+            }
+
+            if (state.drag.isDragging) {
+                e.preventDefault(); 
+                dragGhost.style.left = `${e.clientX - state.drag.offsetX}px`;
+                dragGhost.style.top = `${e.clientY - state.drag.offsetY}px`;
+
+                const elements = document.elementsFromPoint(e.clientX, e.clientY);
+                let foundCol = elements.find(el => el.dataset && el.dataset.colId);
+                
+                if (state.drag.targetColEl && state.drag.targetColEl !== foundCol) {
+                    state.drag.targetColEl.classList.remove('bg-cyan-100');
+                }
+                if (foundCol) {
+                    foundCol.classList.add('bg-cyan-100');
+                    state.drag.targetColEl = foundCol;
+                }
+            }
+        }, { passive: false });
+
+        const resetDrag = () => {
+            clearTimeout(touchTimer);
+            if(dragGhost) dragGhost.classList.add('hidden');
+            if (state.drag.originalCard) state.drag.originalCard.classList.remove('is-dragging');
+            if (state.drag.targetColEl) state.drag.targetColEl.classList.remove('bg-cyan-100');
+            
+            state.drag.isDragging = false;
+            state.drag.isActive = false;
+            state.drag.originalCard = null;
+            document.body.style.overflow = '';
+        };
+
+        document.addEventListener('pointerup', (e) => {
+            clearTimeout(touchTimer);
+            
+            if (!state.drag.isActive && state.drag.originalCard) {
+                // 長押し完了前に指を離した場合＝「タップ」と判定して編集を開く
+                const card = state.drag.originalCard;
+                const colId = card.dataset.colId;
+                const resData = JSON.parse(card.dataset.resData);
+                resetDrag(); 
+                openModal('edit', colId, resData);
+                return;
+            }
+
+            if (state.drag.isDragging) {
+                const { sourceColId, itemId, targetColEl } = state.drag;
+                const targetColId = targetColEl ? targetColEl.dataset.colId : sourceColId;
+
+                if (targetColId && targetColId !== sourceColId) {
+                    let itemToMove = null;
+                    const sourceCol = state.columns.find(c => c.id === sourceColId);
+                    sourceCol.reservations = sourceCol.reservations.filter(r => {
+                        if(r.id === itemId) { itemToMove = r; return false; }
+                        return true;
+                    });
+
+                    if (itemToMove) {
+                        const targetCol = state.columns.find(c => c.id === targetColId);
+                        targetCol.reservations.push(itemToMove);
+                        targetCol.reservations.sort(sortReservations);
+                        saveStateToStorage(); // 移動後に保存
+                    }
+                }
+                resetDrag();
+                renderAllReservations();
+            } else {
+                resetDrag();
+            }
+        });
+
+        // 画面外に出た場合やシステムジェスチャによるキャンセル時
+        document.addEventListener('pointercancel', resetDrag);
+
+        // --- STREAMING_CHUNK:Menu and Settings Logic... ---
+        const menuOverlay = document.getElementById('menu-overlay');
+        const menuDrawer = document.getElementById('menu-drawer');
+        const settingWaitTime = document.getElementById('setting-wait-time');
+        const settingColumns = document.getElementById('setting-columns');
+
+        function openMenu() {
+            // 現在の値をフォームにセット
+            settingWaitTime.value = state.settings.defaultWaitTime;
+            
+            settingColumns.innerHTML = '';
+            state.columns.forEach((col, index) => {
+                settingColumns.innerHTML += `
+                    <div class="bg-slate-50 p-2 rounded border border-slate-200">
+                        <div class="text-xs font-bold text-slate-500 mb-1">列 ${index + 1}</div>
+                        <div class="flex gap-2 mb-2">
+                            <input type="text" id="set-jet-${col.id}" value="${col.jetName}" placeholder="船体名" class="flex-1 w-full text-sm font-bold bg-white border border-slate-300 rounded p-2 outline-none focus:border-cyan-500">
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="set-staff-${col.id}" value="${col.staffName}" placeholder="船長名" class="flex-1 w-full text-sm font-bold bg-white border border-slate-300 rounded p-2 outline-none focus:border-cyan-500">
+                        </div>
+                    </div>
+                `;
+            });
+
+            menuOverlay.classList.remove('hidden');
+            // setTimeout for transition effect
+            setTimeout(() => {
+                menuOverlay.classList.remove('opacity-0');
+                menuDrawer.classList.remove('-translate-x-full');
+            }, 10);
+        }
+
+        function closeMenu() {
+            menuOverlay.classList.add('opacity-0');
+            menuDrawer.classList.add('-translate-x-full');
+            setTimeout(() => {
+                menuOverlay.classList.add('hidden');
+            }, 300);
+        }
+
+        function saveSettings() {
+            // 待機時間を保存
+            state.settings.defaultWaitTime = parseInt(settingWaitTime.value) || 15;
+
+            // 各列の名前を保存
+            state.columns.forEach(col => {
+                const jetInput = document.getElementById(`set-jet-${col.id}`);
+                const staffInput = document.getElementById(`set-staff-${col.id}`);
+                if (jetInput) col.jetName = jetInput.value || `MJ-${col.id.replace('col-','')}`;
+                if (staffInput) col.staffName = staffInput.value || `スタッフ`;
+            });
+
+            saveStateToStorage();
+            initLayout(); // ヘッダー等の再生成のためにUI再構築
+            closeMenu();
+        }
+
+
+        // --- STREAMING_CHUNK:Reservation Modal Logic... ---
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalContent = document.getElementById('modal-content');
+        const titleEl = document.getElementById('modal-title');
+        const timeInput = document.getElementById('input-time');
+        const paxInput = document.getElementById('input-pax');
+        const nameInput = document.getElementById('input-name');
+        const btnDelete = document.getElementById('btn-delete');
+        const menuContainer = document.getElementById('menu-buttons');
+
+        function renderMenuButtons() {
+            menuContainer.innerHTML = '';
+            MENU_OPTIONS.forEach(m => {
+                const btn = document.createElement('button');
+                const isSelected = state.modal.formData.menu === m;
+                const colorClass = getMenuColorClasses(m);
+                
+                btn.className = `flex-1 py-3 text-2xl font-black rounded-xl border-4 transition-colors ${
+                    isSelected ? `${colorClass} border-cyan-300 shadow-md transform scale-105` : 'bg-white border-slate-200 text-slate-400'
+                }`;
+                btn.innerText = m;
+                btn.onclick = () => {
+                    state.modal.formData.menu = m;
+                    renderMenuButtons();
+                };
+                menuContainer.appendChild(btn);
+            });
+        }
+
+        function openModal(mode, colId, resData = null) {
+            state.modal.mode = mode;
+            state.modal.targetColId = colId;
+            
+            if (mode === 'add') {
+                const col = state.columns.find(c => c.id === colId);
+                state.modal.formData = { time: getNextTime(col.reservations), menu: "D", pax: 1, name: "" };
+                titleEl.innerText = '新規予約';
+                btnDelete.classList.add('hidden');
+            } else {
+                state.modal.targetItemId = resData.id;
+                state.modal.formData = { ...resData };
+                titleEl.innerText = '予約の変更';
+                btnDelete.classList.remove('hidden');
+            }
+
+            timeInput.value = state.modal.formData.time;
+            paxInput.value = state.modal.formData.pax;
+            nameInput.value = state.modal.formData.name;
+            renderMenuButtons();
+
+            modalOverlay.classList.remove('hidden');
+            modalOverlay.classList.add('flex');
+            setTimeout(() => { modalContent.classList.remove('translate-y-full'); }, 10);
+        }
+
+        function closeModal() {
+            modalContent.classList.add('translate-y-full');
+            setTimeout(() => {
+                modalOverlay.classList.add('hidden');
+                modalOverlay.classList.remove('flex');
+            }, 300);
+        }
+
+        function saveReservation() {
+            const newRes = {
+                id: state.modal.mode === 'add' ? generateId() : state.modal.targetItemId,
+                time: timeInput.value || "00:00",
+                menu: state.modal.formData.menu,
+                pax: parseInt(paxInput.value) || 1,
+                name: nameInput.value
+            };
+
+            const col = state.columns.find(c => c.id === state.modal.targetColId);
+            
+            if (state.modal.mode === 'add') {
+                col.reservations.push(newRes);
+            } else {
+                const idx = col.reservations.findIndex(r => r.id === newRes.id);
+                if (idx !== -1) col.reservations[idx] = newRes;
+            }
+
+            col.reservations.sort(sortReservations);
+            saveStateToStorage();
+            
+            closeModal();
+            renderAllReservations();
+        }
+
+        function deleteReservation() {
+            const col = state.columns.find(c => c.id === state.modal.targetColId);
+            col.reservations = col.reservations.filter(r => r.id !== state.modal.targetItemId);
+            saveStateToStorage();
+            closeModal();
+            renderAllReservations();
+        }
+
+        // --- アプリ起動 ---
+        loadState();
+        initLayout();
+
+        // --- STREAMING_CHUNK:Fullscreen and PWA logic... ---
+        
+        // フルスクリーン機能
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) { /* Safari */
+                    document.documentElement.webkitRequestFullscreen();
+                } else if (document.documentElement.msRequestFullscreen) { /* IE11 */
+                    document.documentElement.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) { /* Safari */
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) { /* IE11 */
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        // PWAインストール機能 (Android/Chrome等向け)
+        let deferredPrompt;
+        const btnInstall = document.getElementById('btn-install');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // デフォルトのインストール案内をキャンセル
+            e.preventDefault();
+            deferredPrompt = e;
+            // インストールボタンを表示
+            if (btnInstall) btnInstall.classList.remove('hidden');
+        });
+
+        if (btnInstall) {
+            btnInstall.addEventListener('click', async () => {
+                if (deferredPrompt !== null) {
+                    deferredPrompt.prompt();
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                    }
+                    deferredPrompt = null;
+                    btnInstall.classList.add('hidden');
+                }
+            });
+        }
+
+    </script>
+</body>
+</html>
