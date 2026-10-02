@@ -50,7 +50,7 @@
         <button onclick="openMenu()" class="p-2 text-white active:bg-cyan-700 rounded-md">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
-        <h1 class="text-white font-bold text-sm md:text-lg tracking-wider">トーインコントローラー <span class="text-xs text-cyan-300 font-normal">v1.4</span></h1>
+        <h1 class="text-white font-bold text-sm md:text-lg tracking-wider">トーインコントローラー <span class="text-xs text-cyan-300 font-normal">v1.5</span></h1>
         
         <div class="flex items-center gap-1">
             <!-- PWAインストールボタン (条件を満たした時のみ表示) -->
@@ -132,9 +132,9 @@
                     <div class="flex-1">
                         <label class="block text-sm font-bold text-slate-600 mb-1 flex items-center justify-between">
                             <span>予約時間</span>
-                            <span class="text-xs font-normal text-cyan-600 flex items-center" title="上下スワイプで増減">
+                            <span class="text-xs font-normal text-cyan-600 flex items-center" title="上下スワイプで増減 (5分刻み)">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-0.5"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 13 12 18 7 13"></polyline></svg>
-                                スワイプ
+                                5分刻みスワイプ
                             </span>
                         </label>
                         <input type="time" id="input-time" class="w-full text-3xl font-black text-center bg-slate-100 border-2 border-slate-200 rounded-xl py-2 focus:border-cyan-500 outline-none" />
@@ -201,7 +201,7 @@
 
         // ローカルストレージからデータ復元
         function loadState() {
-            const saved = localStorage.getItem('towInAppState_v14');
+            const saved = localStorage.getItem('towInAppState_v15');
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
@@ -215,7 +215,7 @@
 
         // ローカルストレージへ保存
         function saveStateToStorage() {
-            localStorage.setItem('towInAppState_v14', JSON.stringify({
+            localStorage.setItem('towInAppState_v15', JSON.stringify({
                 settings: state.settings,
                 columns: state.columns
             }));
@@ -277,8 +277,8 @@
                             <span class="text-[0.7rem] sm:text-sm md:text-base font-bold truncate block px-1">${col.staffName}</span>
                         </div>
                     </div>
-                    <!-- 独立してスクロールする予約リスト領域 -->
-                    <div id="list-${col.id}" class="flex-1 overflow-y-auto p-1 md:p-2 space-y-1.5 hide-scrollbar pb-32 flex flex-col">
+                    <!-- 独立してスクロールする予約リスト領域 (一番下の予約も上部に持ってこられるよう下部に十分な余白pb-[75vh]を設定) -->
+                    <div id="list-${col.id}" class="flex-1 overflow-y-auto p-1 md:p-2 space-y-1.5 hide-scrollbar pb-[75vh] flex flex-col">
                         <!-- カードはここにレンダリング -->
                     </div>
                 `;
@@ -322,6 +322,9 @@
             state.columns.forEach(col => {
                 const listEl = document.getElementById(`list-${col.id}`);
                 if (!listEl) return;
+                
+                // 既存のカード部分のみクリア（追加ボタンを残す、あるいは全部再描画）
+                // ここでは追加ボタンも含めて一括クリアして再構築
                 listEl.innerHTML = ''; 
 
                 col.reservations.forEach(res => {
@@ -711,7 +714,8 @@
 
         function updateSwipeValue(type, direction) {
             if (type === 'time') {
-                const stepMin = parseInt(state.settings.defaultWaitTime) || 15;
+                // 予約時間のスワイプ変更を5分刻みに固定
+                const stepMin = 5;
                 let [h, m] = timeInput.value.split(":").map(Number);
                 
                 m += direction * stepMin;
