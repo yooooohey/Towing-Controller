@@ -11,6 +11,9 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- 外部マニフェストファイルをリンク -->
+    <link rel="manifest" href="manifest.json">
+
     <style>
         body {
             overscroll-behavior-y: none; /* 引っ張り更新を防止 */
@@ -38,9 +41,6 @@
 
         .is-dragging { opacity: 0.3; }
     </style>
-
-    <!-- ブラウザにアプリとして認識させるマニフェスト設定 -->
-    <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%E3%83%88%E3%83%BC%E3%82%A4%E3%83%B3%E3%82%B3%E3%83%B3%E3%83%88%E3%83%AD%E3%83%BC%E3%83%A9%E3%83%BC%22%2C%22short_name%22%3A%22%E3%83%88%E3%83%BC%E3%82%A4%E3%83%B3%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23164e63%22%2C%22theme_color%22%3A%22%23164e63%22%2C%22start_url%22%3A%22.%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%253E%253Crect%20width%3D%27100%27%20height%3D%27100%27%20fill%3D%27%25230891b2%27%2F%253E%253Ctext%20x%3D%2750%27%20y%3D%2750%27%20font-family%3D%27sans-serif%27%20font-size%3D%2730%27%20fill%3D%27white%27%20text-anchor%3D%27middle%27%20dominant-baseline%3D%27middle%27%253ETow%253C%2Ftext%253E%253C%2Fsvg%253E%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
 </head>
 <body class="h-[100dvh] w-screen overflow-hidden font-sans text-gray-800 flex flex-col bg-cyan-900">
 
@@ -49,7 +49,7 @@
         <button onclick="openMenu()" class="p-2 text-white active:bg-cyan-700 rounded-md">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
-        <h1 class="text-white font-bold text-sm md:text-lg tracking-wider">トーインコントローラー <span class="text-xs text-cyan-300 font-normal">v1.5.1</span></h1>
+        <h1 class="text-white font-bold text-sm md:text-lg tracking-wider">トーインコントローラー <span class="text-xs text-cyan-300 font-normal">v1.5.4</span></h1>
         
         <div class="flex items-center gap-1">
             <!-- PWAインストールボタン (条件を満たした時のみ表示) -->
@@ -200,7 +200,7 @@
 
         // ローカルストレージからデータ復元
         function loadState() {
-            const saved = localStorage.getItem('towInAppState_v151');
+            const saved = localStorage.getItem('towInAppState_v154');
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
@@ -214,7 +214,7 @@
 
         // ローカルストレージへ保存
         function saveStateToStorage() {
-            localStorage.setItem('towInAppState_v151', JSON.stringify({
+            localStorage.setItem('towInAppState_v154', JSON.stringify({
                 settings: state.settings,
                 columns: state.columns
             }));
@@ -754,7 +754,7 @@
             }
         }
 
-        // PWAインストール機能
+        // PWAインストール機能 & ダミーService Workerの動的登録
         let deferredPrompt;
         const btnInstall = document.getElementById('btn-install');
 
@@ -772,6 +772,22 @@
                     deferredPrompt = null;
                     btnInstall.classList.add('hidden');
                 }
+            });
+        }
+
+        // インストール要件を満たすためのService Worker登録
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swCode = `
+                    self.addEventListener('install', (e) => { self.skipWaiting(); });
+                    self.addEventListener('activate', (e) => { e.waitUntil(clients.claim()); });
+                    self.addEventListener('fetch', (e) => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))); });
+                `;
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                const swUrl = URL.createObjectURL(blob);
+                navigator.serviceWorker.register(swUrl).catch(err => {
+                    console.log('ServiceWorker registration skipped:', err);
+                });
             });
         }
     </script>
